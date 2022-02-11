@@ -79,3 +79,4 @@ void zygisk_handler(int client, const sock_cred *cred);
 // Denylist
 void initialize_denylist();
 int denylist_cli(int argc, char **argv);
+void reset_sensitive_props();
