@@ -26,8 +26,8 @@ import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.security.SecureRandom
 
 object HideAPK {
@@ -66,29 +66,29 @@ object HideAPK {
 
     fun patch(
         context: Context,
-        apk: File, out: File,
+        apk: File, out: OutputStream,
         pkg: String, label: CharSequence
     ): Boolean {
         val info = context.packageManager.getPackageArchiveInfo(apk.path, 0) ?: return false
         val name = info.applicationInfo.nonLocalizedLabel.toString()
         try {
-            val jar = JarMap.open(apk, true)
-            val je = jar.getJarEntry(ANDROID_MANIFEST)
-            val xml = AXML(jar.getRawData(je))
+            JarMap.open(apk, true).use { jar ->
+                val je = jar.getJarEntry(ANDROID_MANIFEST)
+                val xml = AXML(jar.getRawData(je))
 
-            if (!xml.findAndPatch(APPLICATION_ID to pkg, name to label.toString()))
-                return false
+                if (!xml.findAndPatch(APPLICATION_ID to pkg, name to label.toString()))
+                    return false
 
-            // Write apk changes
-            jar.getOutputStream(je).write(xml.bytes)
-            val keys = Keygen(context)
-            SignApk.sign(keys.cert, keys.key, jar, FileOutputStream(out))
+                // Write apk changes
+                jar.getOutputStream(je).use { it.write(xml.bytes) }
+                val keys = Keygen(context)
+                SignApk.sign(keys.cert, keys.key, jar, out)
+                return true
+            }
         } catch (e: Exception) {
             Timber.e(e)
             return false
         }
-
-        return true
     }
 
     private fun launchApp(activity: Activity, pkg: String) {
@@ -116,19 +116,18 @@ object HideAPK {
         }
 
         // Generate a new random package name and signature
-        val repack = File(activity.cacheDir, "patched.apk")
         val pkg = genPackageName()
         Config.keyStoreRaw = ""
-
-        if (!patch(activity, stub, repack, pkg, label))
-            return false
 
         // Install and auto launch app
         val session = APKInstall.startSession(activity, pkg, onFailure) {
             launchApp(activity, pkg)
         }
         try {
-            session.install(activity, repack)
+            val success = session.openStream(activity).use {
+                patch(activity, stub, it, pkg, label)
+            }
+            if (!success) return false
         } catch (e: IOException) {
             Timber.e(e)
             return false
