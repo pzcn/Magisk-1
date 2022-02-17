@@ -5,7 +5,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContract
 
@@ -24,11 +23,7 @@ class RequestInstall : ActivityResultContract<Unit, Boolean>() {
     override fun getSynchronousResult(
         context: Context,
         input: Unit
-    ): SynchronousResult<Boolean>? {
-        if (Build.VERSION.SDK_INT < 26)
-            return SynchronousResult(true)
-        if (context.packageManager.canRequestPackageInstalls())
-            return SynchronousResult(true)
-        return null
+    ): SynchronousResult<Boolean> {
+        return SynchronousResult(true)
     }
 }

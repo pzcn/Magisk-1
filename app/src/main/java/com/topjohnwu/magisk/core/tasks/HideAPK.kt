@@ -1,7 +1,6 @@
 package com.topjohnwu.magisk.core.tasks
 
 import android.app.Activity
-import android.app.ProgressDialog
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -15,6 +14,7 @@ import com.topjohnwu.magisk.core.Provider
 import com.topjohnwu.magisk.core.utils.AXML
 import com.topjohnwu.magisk.core.utils.Keygen
 import com.topjohnwu.magisk.di.ServiceLocator
+import com.topjohnwu.magisk.ktx.await
 import com.topjohnwu.magisk.ktx.writeTo
 import com.topjohnwu.magisk.signing.JarMap
 import com.topjohnwu.magisk.signing.SignApk
@@ -26,8 +26,8 @@ import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
-import java.io.OutputStream
 import java.security.SecureRandom
 
 object HideAPK {
@@ -66,7 +66,7 @@ object HideAPK {
 
     fun patch(
         context: Context,
-        apk: File, out: OutputStream,
+        apk: File, out: File,
         pkg: String, label: CharSequence
     ): Boolean {
         val info = context.packageManager.getPackageArchiveInfo(apk.path, 0) ?: return false
@@ -82,7 +82,7 @@ object HideAPK {
                 // Write apk changes
                 jar.getOutputStream(je).use { it.write(xml.bytes) }
                 val keys = Keygen(context)
-                SignApk.sign(keys.cert, keys.key, jar, out)
+                SignApk.sign(keys.cert, keys.key, jar, FileOutputStream(out))
                 return true
             }
         } catch (e: Exception) {
@@ -116,18 +116,23 @@ object HideAPK {
         }
 
         // Generate a new random package name and signature
+        val repack = File(activity.cacheDir, "patched.apk")
         val pkg = genPackageName()
         Config.keyStoreRaw = ""
+
+        if (!patch(activity, stub, repack, pkg, label))
+            return false
 
         // Install and auto launch app
         val session = APKInstall.startSession(activity, pkg, onFailure) {
             launchApp(activity, pkg)
         }
+
+        val cmd = "adb_pm_install $repack ${activity.applicationInfo.uid}"
+        if (Shell.su(cmd).exec().isSuccess) return true
+
         try {
-            val success = session.openStream(activity).use {
-                patch(activity, stub, it, pkg, label)
-            }
-            if (!success) return false
+            session.install(activity, repack)
         } catch (e: IOException) {
             Timber.e(e)
             return false
@@ -138,7 +143,7 @@ object HideAPK {
 
     @Suppress("DEPRECATION")
     suspend fun hide(activity: Activity, label: String) {
-        val dialog = ProgressDialog(activity).apply {
+        val dialog = android.app.ProgressDialog(activity).apply {
             setTitle(activity.getString(R.string.hide_app_title))
             isIndeterminate = true
             setCancelable(false)
@@ -156,7 +161,7 @@ object HideAPK {
 
     @Suppress("DEPRECATION")
     suspend fun restore(activity: Activity) {
-        val dialog = ProgressDialog(activity).apply {
+        val dialog = android.app.ProgressDialog(activity).apply {
             setTitle(activity.getString(R.string.restore_img_msg))
             isIndeterminate = true
             setCancelable(false)
@@ -171,6 +176,8 @@ object HideAPK {
             launchApp(activity, APPLICATION_ID)
             dialog.dismiss()
         }
+        val cmd = "adb_pm_install $apk ${activity.applicationInfo.uid}"
+        if (Shell.su(cmd).await().isSuccess) return
         val success = withContext(Dispatchers.IO) {
             try {
                 session.install(activity, apk)
