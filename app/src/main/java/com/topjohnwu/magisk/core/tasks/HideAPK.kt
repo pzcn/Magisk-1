@@ -118,7 +118,7 @@ object HideAPK {
 
         // Generate a new random package name and signature
         val repack = File(activity.cacheDir, "patched.apk")
-        val pkg = genPackageName()
+        val pkg = "mag.isk"
         Config.keyStoreRaw = ""
 
         if (!patch(activity, stub, FileOutputStream(repack), pkg, label))
