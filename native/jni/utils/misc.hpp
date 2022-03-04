@@ -5,8 +5,6 @@
 #include <functional>
 #include <string_view>
 #include <bitset>
-#include <compare>
-#include "xwrap.hpp"
 
 #define UID_ROOT   0
 #define UID_SHELL  2000
@@ -161,7 +159,8 @@ uint32_t binary_gcd(uint32_t u, uint32_t v);
 int switch_mnt_ns(int pid);
 int gen_rand_str(char *buf, int len, bool varlen = true);
 std::string &replace_all(std::string &str, std::string_view from, std::string_view to);
-std::vector<std::string> split(const std::string& s, const std::string& delimiters);
+std::vector<std::string> split(const std::string &s, const std::string &delims);
+std::vector<std::string_view> split_ro(std::string_view, std::string_view delims);
 
 struct exec_t {
     bool err = false;
@@ -198,33 +197,4 @@ void exec_command_async(Args &&...args) {
         .argv = argv,
     };
     exec_command(exec);
-}
-
-template <class _Tp, bool = std::is_enum_v<_Tp> >
-struct __is_scoped_enum_helper : std::false_type {};
-
-template <class _Tp>
-struct __is_scoped_enum_helper<_Tp, true>
-: public std::bool_constant<!std::is_convertible_v<_Tp, std::underlying_type_t<_Tp> > > {};
-
-template <class _Tp>
-struct is_scoped_enum
-        : public __is_scoped_enum_helper<_Tp> {};
-
-template <class _Tp>
-inline constexpr bool is_scoped_enum_v = is_scoped_enum<_Tp>::value;
-
-template<typename Enum> requires( is_scoped_enum_v<Enum> )
-constexpr inline auto operator <=> (std::underlying_type_t<Enum> a, Enum b) {
-    return a <=> static_cast<std::underlying_type_t<Enum>>(b);
-}
-
-template<typename Enum> requires( is_scoped_enum_v<Enum> )
-constexpr inline auto operator != (std::underlying_type_t<Enum> a, Enum b) {
-    return a != static_cast<std::underlying_type_t<Enum>>(b);
-}
-
-template<typename Enum> requires( is_scoped_enum_v<Enum> )
-constexpr inline auto operator == (std::underlying_type_t<Enum> a, Enum b) {
-    return a == static_cast<std::underlying_type_t<Enum>>(b);
 }

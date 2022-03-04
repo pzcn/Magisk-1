@@ -49,15 +49,15 @@ data class LocalModule(
             if (enable) {
                 disableFile.delete()
                 if (Const.Version.atLeast_21_2())
-                    Shell.su("copy_sepolicy_rules").submit()
+                    Shell.cmd("copy_sepolicy_rules").submit()
                 else
-                    Shell.su("mkdir -p $dir", "cp -af $ruleFile $dir").submit()
+                    Shell.cmd("mkdir -p $dir", "cp -af $ruleFile $dir").submit()
             } else {
                 !disableFile.createNewFile()
                 if (Const.Version.atLeast_21_2())
-                    Shell.su("copy_sepolicy_rules").submit()
+                    Shell.cmd("copy_sepolicy_rules").submit()
                 else
-                    Shell.su("rm -rf $dir").submit()
+                    Shell.cmd("rm -rf $dir").submit()
             }
         }
 
@@ -68,15 +68,15 @@ data class LocalModule(
                 if (updateFile.exists()) return
                 removeFile.createNewFile()
                 if (Const.Version.atLeast_21_2())
-                    Shell.su("copy_sepolicy_rules").submit()
+                    Shell.cmd("copy_sepolicy_rules").submit()
                 else
-                    Shell.su("rm -rf $PERSIST/$id").submit()
+                    Shell.cmd("rm -rf $PERSIST/$id").submit()
             } else {
                 removeFile.delete()
                 if (Const.Version.atLeast_21_2())
-                    Shell.su("copy_sepolicy_rules").submit()
+                    Shell.cmd("copy_sepolicy_rules").submit()
                 else
-                    Shell.su("cp -af $ruleFile $PERSIST/$id").submit()
+                    Shell.cmd("cp -af $ruleFile $PERSIST/$id").submit()
             }
         }
 
@@ -106,7 +106,7 @@ data class LocalModule(
 
     init {
         runCatching {
-            parseProps(Shell.su("dos2unix < $path/module.prop").exec().out)
+            parseProps(Shell.cmd("dos2unix < $path/module.prop").exec().out)
         }
 
         if (id.isEmpty()) {

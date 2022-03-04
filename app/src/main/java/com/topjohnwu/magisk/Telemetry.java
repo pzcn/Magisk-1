@@ -1,6 +1,9 @@
 package com.topjohnwu.magisk;
 
 import android.app.Application;
+import android.content.Context;
+import android.content.ContextWrapper;
+import android.os.Build;
 import android.os.Handler;
 
 import androidx.annotation.NonNull;
@@ -50,6 +53,24 @@ public class Telemetry {
         }
     }
 
+    private static Application getDeApplication(Application app) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return app;
+        var deApp = new Application() {
+            @Override
+            public void registerActivityLifecycleCallbacks(ActivityLifecycleCallbacks callback) {
+                app.registerActivityLifecycleCallbacks(callback);
+            }
+        };
+        try {
+            var attach = ContextWrapper.class.getDeclaredMethod("attachBaseContext", Context.class);
+            attach.setAccessible(true);
+            attach.invoke(deApp, app.getApplicationContext().createDeviceProtectedStorageContext());
+            return deApp;
+        } catch (ReflectiveOperationException ignored) {
+            return app;
+        }
+    }
+
     public static void start(Application app, String text, String fileName) {
         Crashes.setListener(new AbstractCrashesListener() {
             @Override
@@ -59,7 +80,7 @@ public class Telemetry {
                 return list;
             }
         });
-        AppCenter.start(app, "051a74ce-6ccb-4580-bed9-52d4437715af",
+        AppCenter.start(getDeApplication(app), "051a74ce-6ccb-4580-bed9-52d4437715af",
                 Analytics.class, Crashes.class);
         AppCenter.setLogLevel(android.util.Log.ERROR);
         patchDevice();

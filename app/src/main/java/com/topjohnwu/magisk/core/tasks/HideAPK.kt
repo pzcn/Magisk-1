@@ -28,6 +28,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.OutputStream
 import java.security.SecureRandom
 
 object HideAPK {
@@ -66,7 +67,7 @@ object HideAPK {
 
     fun patch(
         context: Context,
-        apk: File, out: File,
+        apk: File, out: OutputStream,
         pkg: String, label: CharSequence
     ): Boolean {
         val info = context.packageManager.getPackageArchiveInfo(apk.path, 0) ?: return false
@@ -82,7 +83,7 @@ object HideAPK {
                 // Write apk changes
                 jar.getOutputStream(je).use { it.write(xml.bytes) }
                 val keys = Keygen(context)
-                SignApk.sign(keys.cert, keys.key, jar, FileOutputStream(out))
+                SignApk.sign(keys.cert, keys.key, jar, out)
                 return true
             }
         } catch (e: Exception) {
@@ -111,7 +112,7 @@ object HideAPK {
             Timber.e(e)
             stub.createNewFile()
             val cmd = "\$MAGISKBIN/magiskinit -x manager ${stub.path}"
-            if (!Shell.su(cmd).exec().isSuccess)
+            if (!Shell.cmd(cmd).exec().isSuccess)
                 return false
         }
 
@@ -120,7 +121,7 @@ object HideAPK {
         val pkg = genPackageName()
         Config.keyStoreRaw = ""
 
-        if (!patch(activity, stub, repack, pkg, label))
+        if (!patch(activity, stub, FileOutputStream(repack), pkg, label))
             return false
 
         // Install and auto launch app

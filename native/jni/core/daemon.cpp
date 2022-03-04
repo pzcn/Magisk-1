@@ -133,34 +133,34 @@ static void poll_ctrl_handler(pollfd *pfd) {
     }
 }
 
-static void handle_request_async(int client, DaemonRequest code, const sock_cred &cred) {
-    // using enum DAEMON_REQUEST;
+static void handle_request_async(int client, int code, const sock_cred &cred) {
     switch (code) {
-    case DaemonRequest::DENYLIST:
+    case MainRequest::DENYLIST:
         denylist_handler(client, &cred);
         break;
-    case DaemonRequest::SUPERUSER:
+    case MainRequest::SUPERUSER:
         su_daemon_handler(client, &cred);
         break;
-    case DaemonRequest::POST_FS_DATA:
+    case MainRequest::POST_FS_DATA:
         post_fs_data(client);
         break;
-    case DaemonRequest::LATE_START:
+    case MainRequest::LATE_START:
         late_start(client);
         break;
-    case DaemonRequest::BOOT_COMPLETE:
+    case MainRequest::BOOT_COMPLETE:
         boot_complete(client);
         break;
-    case DaemonRequest::SQLITE_CMD:
+    case MainRequest::SQLITE_CMD:
         exec_sql(client);
         break;
-    case DaemonRequest::REMOVE_MODULES:
+    case MainRequest::REMOVE_MODULES:
         remove_modules();
         write_int(client, 0);
         close(client);
         reboot();
         break;
-    case DaemonRequest::ZYGISK_REQUEST:
+    case MainRequest::ZYGISK:
+    case MainRequest::ZYGISK_PASSTHROUGH:
         zygisk_handler(client, &cred);
         break;
     default:
@@ -168,22 +168,21 @@ static void handle_request_async(int client, DaemonRequest code, const sock_cred
     }
 }
 
-static void handle_request_sync(int client, DaemonRequest code) {
-    // using enum DAEMON_REQUEST;
+static void handle_request_sync(int client, int code) {
     switch (code) {
-    case DaemonRequest::CHECK_VERSION:
+    case MainRequest::CHECK_VERSION:
         write_string(client, MAGISK_VERSION ":MAGISK");
         break;
-    case DaemonRequest::CHECK_VERSION_CODE:
+    case MainRequest::CHECK_VERSION_CODE:
         write_int(client, MAGISK_VER_CODE);
         break;
-    case DaemonRequest::GET_PATH:
+    case MainRequest::GET_PATH:
         write_string(client, MAGISKTMP.data());
         break;
-    case DaemonRequest::START_DAEMON:
+    case MainRequest::START_DAEMON:
         setup_logfile(true);
         break;
-    case DaemonRequest::STOP_DAEMON:
+    case MainRequest::STOP_DAEMON:
         denylist_handler(-1, nullptr);
         write_int(client, 0);
         // Terminate the daemon!
@@ -201,13 +200,7 @@ static bool is_client(pid_t pid) {
     return !(stat(path, &st) || st.st_dev != self_st.st_dev || st.st_ino != self_st.st_ino);
 }
 
-inline static void write_response(int client, DaemonResponse res) {
-    write_int(client, static_cast<std::underlying_type_t<DaemonResponse>>(res));
-}
-
 static void handle_request(pollfd *pfd) {
-//    using enum DAEMON_REQUEST;
-//    using enum DAEMON_RESPONSE;
     int client = xaccept4(pfd->fd, nullptr, nullptr, SOCK_CLOEXEC);
 
     // Verify client credentials
@@ -215,41 +208,50 @@ static void handle_request(pollfd *pfd) {
     bool is_root;
     bool is_zygote;
     int code;
-    DaemonRequest req;
 
-    if (!get_client_cred(client, &cred))
+    if (!get_client_cred(client, &cred)) {
+        // Client died
         goto done;
+    }
     is_root = cred.uid == UID_ROOT;
     is_zygote = cred.context == "u:r:zygote:s0";
 
-    if (!is_root && !is_zygote && !is_client(cred.pid))
+    if (!is_root && !is_zygote && !is_client(cred.pid)) {
+        // Unsupported client state
+        write_int(client, MainResponse::ACCESS_DENIED);
         goto done;
+    }
 
     code = read_int(client);
-    static_assert(is_scoped_enum_v<DaemonRequest>);
-
-    if (code < 0 || code >= DaemonRequest::END || code == DaemonRequest::_SYNC_BARRIER_)
+    if (code < 0 || code >= MainRequest::END || code == MainRequest::_SYNC_BARRIER_) {
+        // Unknown request code
         goto done;
-
-    req = static_cast<DaemonRequest>(code);
+    }
 
     // Check client permissions
-    switch (req) {
-    case DaemonRequest::POST_FS_DATA:
-    case DaemonRequest::LATE_START:
-    case DaemonRequest::BOOT_COMPLETE:
-    case DaemonRequest::SQLITE_CMD:
-    case DaemonRequest::GET_PATH:
-    case DaemonRequest::DENYLIST:
-    case DaemonRequest::STOP_DAEMON:
+    switch (code) {
+    case MainRequest::POST_FS_DATA:
+    case MainRequest::LATE_START:
+    case MainRequest::BOOT_COMPLETE:
+    case MainRequest::SQLITE_CMD:
+    case MainRequest::GET_PATH:
+    case MainRequest::DENYLIST:
+    case MainRequest::STOP_DAEMON:
         if (!is_root) {
-            write_response(client, DaemonResponse::ROOT_REQUIRED);
+            write_int(client, MainResponse::ROOT_REQUIRED);
             goto done;
         }
         break;
-    case DaemonRequest::REMOVE_MODULES:
+    case MainRequest::REMOVE_MODULES:
         if (!is_root && cred.uid != UID_SHELL) {
-            write_response(client, DaemonResponse::ROOT_REQUIRED);
+            write_int(client, MainResponse::ACCESS_DENIED);
+            goto done;
+        }
+        break;
+    case MainRequest::ZYGISK:
+        if (!is_zygote) {
+            // Invalid client context
+            write_int(client, MainResponse::ACCESS_DENIED);
             goto done;
         }
         break;
@@ -257,15 +259,15 @@ static void handle_request(pollfd *pfd) {
         break;
     }
 
-    write_response(client, DaemonResponse::OK);
+    write_int(client, MainResponse::OK);
 
-    if (req < DaemonRequest::_SYNC_BARRIER_) {
-        handle_request_sync(client, req);
+    if (code < MainRequest::_SYNC_BARRIER_) {
+        handle_request_sync(client, code);
         goto done;
     }
 
-    // Handle complex requests in another thread
-    exec_task([=] { handle_request_async(client, req, cred); });
+    // Handle async requests in another thread
+    exec_task([=] { handle_request_async(client, code, cred); });
     return;
 
 done:
@@ -319,9 +321,11 @@ static void daemon_entry() {
     // Escape from cgroup
     int pid = getpid();
     switch_cgroup("/acct", pid);
-    switch_cgroup("/dev/memcg/apps", pid);
     switch_cgroup("/dev/cg2_bpf", pid);
     switch_cgroup("/sys/fs/cgroup", pid);
+    if (getprop("ro.config.per_app_memcg") != "false") {
+        switch_cgroup("/dev/memcg/apps", pid);
+    }
 
     // Get self stat
     char buf[64];
@@ -400,8 +404,7 @@ static void daemon_entry() {
     poll_loop();
 }
 
-int connect_daemon(DaemonRequest req, bool create) {
-//    using enum DAEMON_RESPONSE;
+int connect_daemon(int req, bool create) {
     sockaddr_un sun{};
     socklen_t len = setup_sockaddr(&sun, MAIN_SOCKET);
     int fd = xsocket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
@@ -420,23 +423,23 @@ int connect_daemon(DaemonRequest req, bool create) {
         while (connect(fd, (struct sockaddr *) &sun, len))
             usleep(10000);
     }
-    write_int(fd, static_cast<int>(req));
-    int ret = read_int(fd);
-    auto res = (ret < DaemonResponse::ERROR || ret >= DaemonResponse::END) ? DaemonResponse::ERROR
-                                                                           : static_cast<DaemonResponse>(ret);
+    write_int(fd, req);
+    int res = read_int(fd);
+    if (res < MainResponse::ERROR || res >= MainResponse::END)
+        res = MainResponse::ERROR;
     switch (res) {
-    case DaemonResponse::OK:
+    case MainResponse::OK:
         break;
-    case DaemonResponse::ERROR:
+    case MainResponse::ERROR:
         LOGE("Daemon error\n");
         exit(-1);
-    case DaemonResponse::ROOT_REQUIRED:
+    case MainResponse::ROOT_REQUIRED:
         LOGE("Root is required for this operation\n");
         exit(-1);
-    case DaemonResponse::INVALID_REQUEST:
-        LOGE("Invalid request\n");
+    case MainResponse::ACCESS_DENIED:
+        LOGE("Access denied\n");
         exit(-1);
-    case DaemonResponse::END:
+    default:
         __builtin_unreachable();
     }
     return fd;

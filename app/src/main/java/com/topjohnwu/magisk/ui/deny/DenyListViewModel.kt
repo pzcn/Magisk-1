@@ -59,7 +59,7 @@ class DenyListViewModel : BaseViewModel() {
             val info = pm.getPackageArchiveInfo(AppApkPath, PackageManager.GET_SIGNATURES)
             val trust = Arrays.equals(info!!.signatures[0].toByteArray(), KeyData.signCert())
             if (!trust) return@withContext emptyList<DenyListRvItem>() to items.calculateDiff(emptyList())
-            val denyList = Shell.su("magisk --denylist ls").exec().out
+            val denyList = Shell.cmd("magisk --denylist ls").exec().out
                 .map { CmdlineListItem(it) }
             val apps = pm.getInstalledApplications(MATCH_UNINSTALLED_PACKAGES).run {
                 asFlow()
