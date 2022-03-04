@@ -293,7 +293,6 @@ void post_fs_data(int client) {
 
     LOGI("** post-fs-data mode running\n");
 
-    unlock_blocks();
     mount_mirrors();
 
     if (access(SECURE_DIR, F_OK) != 0) {
@@ -372,6 +371,8 @@ void boot_complete(int client) {
     // At this point it's safe to create the folder
     if (access(SECURE_DIR, F_OK) != 0)
         xmkdir(SECURE_DIR, 0700);
+
+    reset_sensitive_props();
 
     if (!get_manager()) {
         if (access(MANAGERAPK, F_OK) == 0) {

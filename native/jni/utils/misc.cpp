@@ -37,7 +37,7 @@ int gen_rand_str(char *buf, int len, bool varlen) {
     constexpr char ALPHANUM[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     static mt19937 gen([]{
         mt19937::result_type seed;
-        if (syscall(__NR_getrandom, &seed, sizeof(seed), 0) < 0) {
+        if (syscall(__NR_getrandom, &seed, sizeof(seed), 1) < 0) {
             // This can happen if device is running a too low Linux version
             if (access("/dev/urandom", F_OK) != 0)
                 mknod("/dev/urandom", 0600 | S_IFCHR, makedev(1, 9));

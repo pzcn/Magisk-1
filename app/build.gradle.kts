@@ -20,7 +20,7 @@ kapt {
 
 android {
     defaultConfig {
-        applicationId = "com.topjohnwu.magisk"
+        applicationId = "io.github.vvb2060.magisk"
         vectorDrawables.useSupportLibrary = true
         versionName = Config.version
         versionCode = Config.versionCode
@@ -113,6 +113,10 @@ dependencies {
     val vNav = "2.5.0-alpha01"
     implementation("androidx.navigation:navigation-fragment-ktx:${vNav}")
     implementation("androidx.navigation:navigation-ui-ktx:${vNav}")
+
+    val vAppCenter = "4.4.2"
+    implementation("com.microsoft.appcenter:appcenter-analytics:${vAppCenter}")
+    implementation("com.microsoft.appcenter:appcenter-crashes:${vAppCenter}")
 
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.3")
