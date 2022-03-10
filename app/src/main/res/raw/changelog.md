@@ -1,6 +1,6 @@
 # alpha更新日志
 
-## Magisk (e51aacb0-alpha)
+## Magisk (2c092ffd-alpha)
 - [App] 支持SharedUserId
 - [App] 还原boot镜像后删除备份文件
 - [App] 内置当前版本更新日志
@@ -10,8 +10,6 @@
 - [App] 添加崩溃统计
 - [Script] 支持 init_boot 分区
 - [App] 允许加载zygisk模块
-- [App] 首先尝试root安装
-- [App] 修复直接启动时的崩溃
 
 ### 如何安装？
 通过Magisk应用来安装和卸载Magisk，一般情况应直接在应用内完成，第一次安装等特殊情况应修补镜像后使用fastboot/odin工具刷入。
@@ -19,9 +17,15 @@
 
 # 上游更新日志
 
-## 2022.3.1 Magisk v24.2
+## 2022.3.10 Magisk v24.3
 
-Maintenance release fixing various issues.
+For those coming from v24.1, check the full changelog for changes introduced in v24.2.
+
+- [General] Stop using `getrandom` syscall
+- [Zygisk] Update API to v3, adding new fields to `AppSpecializeArgs`
+- [App] Improve app repackaging installation workflow
+
+### v24.2
 
 - [MagiskSU] Fix buffer overflow
 - [MagiskSU] Fix owner managed multiuser superuser settings
